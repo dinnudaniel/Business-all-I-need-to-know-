@@ -1,31 +1,30 @@
 const express = require('express');
-const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const path = require('path');
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const SYSTEM_PROMPT = `You are CORP INTEL, an elite corporate intelligence analyst with access to real-time web information. Your job is to build a comprehensive intelligence dossier on any company.
+const PROMPT_TEMPLATE = (company) => `
+You are CORP INTEL, an elite corporate intelligence analyst. Research "${company}" thoroughly using Google Search and build a complete intelligence dossier.
 
-When given a company name, use your web search and fetch tools extensively to research:
-1. What the company does, its history, headquarters, employee count
-2. The CEO's identity, background, tenure, and any notable decisions
-3. The latest news (past 30-60 days) — earnings, launches, controversies, partnerships
+Research these areas:
+1. What the company does, history, headquarters, employee count
+2. The CEO — name, background, tenure, notable decisions
+3. Latest news (past 30-60 days) — earnings, launches, controversies, partnerships
 4. Recent company actions — acquisitions, layoffs, expansions, regulatory issues
-5. Financial data — revenue, market cap, stock price (if public), growth trends
-6. Supply chain, trade activities, major shipments or logistics information
-7. Any risk flags — lawsuits, controversies, regulatory scrutiny, leadership changes
+5. Financial data — revenue, market cap, stock price (if public)
+6. Supply chain, trade activities, shipments or logistics information
+7. Risk flags — lawsuits, controversies, regulatory scrutiny
 
-After thorough research, output ONLY a valid JSON object in this exact structure (no markdown, no extra text):
+Output ONLY a valid JSON object with no markdown, no code blocks, no extra text:
 
 {
   "company_name": "Official full company name",
-  "ticker": "STOCK:TICKER or null if private",
+  "ticker": "EXCHANGE:TICKER or null if private",
   "industry": "Primary industry/sector",
   "overview": {
     "description": "Detailed 2-3 paragraph description of what the company does, its business model, and market position",
@@ -38,10 +37,9 @@ After thorough research, output ONLY a valid JSON object in this exact structure
     "ceo": {
       "name": "Full name",
       "since": "Year they became CEO",
-      "background": "2-3 sentences on their background, previous roles, and notable leadership decisions"
+      "background": "2-3 sentences on background, previous roles, and notable decisions"
     },
     "key_executives": [
-      {"role": "Title", "name": "Full Name"},
       {"role": "Title", "name": "Full Name"}
     ]
   },
@@ -56,7 +54,7 @@ After thorough research, output ONLY a valid JSON object in this exact structure
   "company_actions": [
     {
       "date": "YYYY-MM or approximate",
-      "action": "Type (e.g., Acquisition, Partnership, Expansion, Layoff, IPO, Product Launch)",
+      "action": "Type (Acquisition, Partnership, Expansion, Layoff, IPO, Product Launch, etc.)",
       "description": "What happened and impact"
     }
   ],
@@ -65,23 +63,21 @@ After thorough research, output ONLY a valid JSON object in this exact structure
     "market_cap": "Current market cap or 'Private'",
     "stock_price": "Current price with currency, or null if private",
     "key_metrics": [
-      {"metric": "Metric name", "value": "Value"},
       {"metric": "Metric name", "value": "Value"}
     ],
-    "recent_performance": "2-3 sentence summary of recent financial performance and trends"
+    "recent_performance": "2-3 sentence summary of recent financial performance"
   },
   "shipments_trade": {
-    "summary": "Overview of supply chain, logistics, trade activities. If a retailer/manufacturer, describe shipment scale. If software company, describe data centers/infrastructure.",
+    "summary": "Overview of supply chain and trade. For retailers/manufacturers: shipment scale. For software: infrastructure/data centers.",
     "notable_movements": [
-      {"description": "Specific notable trade, logistics, or supply chain activity"}
+      {"description": "Notable trade, logistics, or supply chain activity"}
     ]
   },
   "risk_flags": [
     "Specific risk, controversy, lawsuit, or concern with brief context"
   ]
 }
-
-Be thorough. Search multiple times. Verify information. Output only the JSON.`;
+`;
 
 app.post('/api/research', async (req, res) => {
   const { company } = req.body;
@@ -101,56 +97,30 @@ app.post('/api/research', async (req, res) => {
     res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
   };
 
-  const toolMessages = {
-    web_search: 'Scanning web sources...',
-    web_fetch: 'Fetching detailed intelligence...',
-  };
-
   try {
-    const stream = anthropic.messages.stream({
-      model: 'claude-opus-4-6',
-      max_tokens: 8000,
-      thinking: { type: 'adaptive' },
-      tools: [
-        { type: 'web_search_20260209', name: 'web_search' },
-        { type: 'web_fetch_20260209', name: 'web_fetch' },
-      ],
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: `Build a complete intelligence dossier on this company: ${sanitizedCompany}`,
-        },
-      ],
+    send('status', 'Connecting to intelligence network...');
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      tools: [{ googleSearch: {} }],
     });
 
-    let accumulatedText = '';
-    let searchCount = 0;
+    send('status', 'Searching web sources...');
 
-    for await (const event of stream) {
-      if (event.type === 'content_block_start') {
-        const block = event.content_block;
-        if (block.type === 'server_tool_use') {
-          searchCount++;
-          const toolName = block.name;
-          const msg = toolMessages[toolName] || `Running ${toolName}...`;
-          send('status', `[${searchCount}] ${msg}`);
-        }
-      }
+    const result = await model.generateContent(PROMPT_TEMPLATE(sanitizedCompany));
+    const response = result.response;
 
-      if (event.type === 'content_block_delta') {
-        if (event.delta.type === 'text_delta') {
-          accumulatedText += event.delta.text;
-          // Send periodic progress signals
-          if (accumulatedText.length % 500 < 5) {
-            send('progress', accumulatedText.length);
-          }
-        }
-      }
-    }
+    send('status', 'Compiling intelligence report...');
 
-    // Try to extract JSON from the accumulated text
-    const jsonMatch = accumulatedText.match(/\{[\s\S]*\}/);
+    const rawText = response.text();
+
+    // Strip markdown code fences if Gemini wraps in ```json ... ```
+    const cleaned = rawText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '')
+      .trim();
+
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       send('error', 'No intelligence data returned. Please try again.');
       res.end();
@@ -166,16 +136,18 @@ app.post('/api/research', async (req, res) => {
       return;
     }
 
+    send('progress', 100);
     send('complete', parsed);
     res.end();
   } catch (err) {
     console.error('Research error:', err);
-    if (err instanceof Anthropic.AuthenticationError) {
-      send('error', 'API authentication failed. Please check your ANTHROPIC_API_KEY.');
-    } else if (err instanceof Anthropic.RateLimitError) {
-      send('error', 'Rate limit reached. Please wait a moment and try again.');
+    const msg = err.message || '';
+    if (msg.includes('API_KEY') || msg.includes('403') || msg.includes('401')) {
+      send('error', 'Invalid API key. Check your GEMINI_API_KEY.');
+    } else if (msg.includes('429') || msg.includes('quota')) {
+      send('error', 'Rate limit reached. Wait a moment and try again.');
     } else {
-      send('error', err.message || 'Investigation failed. Please try again.');
+      send('error', msg || 'Investigation failed. Please try again.');
     }
     res.end();
   }
@@ -188,5 +160,5 @@ app.get('/health', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`\n🔍 CORP INTEL running at http://localhost:${PORT}`);
-  console.log(`   Set ANTHROPIC_API_KEY env var to activate\n`);
+  console.log(`   Set GEMINI_API_KEY env var to activate\n`);
 });
