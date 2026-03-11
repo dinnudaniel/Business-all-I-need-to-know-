@@ -9,7 +9,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const PROMPT_TEMPLATE = (company) => `
-You are CORP INTEL, an elite corporate intelligence analyst. Research "${company}" thoroughly using Google Search and build a complete intelligence dossier.
+You are CORP INTEL, an elite corporate intelligence analyst. Research "${company}" thoroughly and build a complete intelligence dossier.
 
 Research these areas:
 1. What the company does, history, headquarters, employee count
@@ -102,19 +102,17 @@ app.post('/api/research', async (req, res) => {
 
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.0-flash-lite',
-      tools: [{ googleSearch: {} }],
     });
 
-    send('status', 'Searching web sources...');
+    send('status', 'Compiling intelligence report...');
 
     const result = await model.generateContent(PROMPT_TEMPLATE(sanitizedCompany));
     const response = result.response;
 
-    send('status', 'Compiling intelligence report...');
+    send('status', 'Processing intelligence data...');
 
     const rawText = response.text();
 
-    // Strip markdown code fences if Gemini wraps in ```json ... ```
     const cleaned = rawText
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```\s*$/, '')
@@ -143,7 +141,7 @@ app.post('/api/research', async (req, res) => {
     console.error('Research error:', err);
     const msg = err.message || '';
     if (msg.includes('API_KEY') || msg.includes('403') || msg.includes('401')) {
-      send('error', 'Invalid API key. Check your GEMINI_API_KEY.');
+      send('error', 'Invalid API key. Check your GEMINI_API_KEY in Render environment variables.');
     } else if (msg.includes('429') || msg.includes('quota')) {
       send('error', 'Rate limit reached. Wait a moment and try again.');
     } else {
