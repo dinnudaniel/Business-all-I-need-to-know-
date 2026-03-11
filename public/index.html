@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CORP INTEL — Corporate Intelligence Platform</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">⬡</div>
+        <div class="logo-text">
+          <span class="logo-main">CORP INTEL</span>
+          <span class="logo-sub">CORPORATE INTELLIGENCE PLATFORM</span>
+        </div>
+      </div>
+      <div class="header-badges">
+        <span class="badge badge-red">CLASSIFIED</span>
+        <span class="badge badge-gold">LEVEL 5</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Search Section -->
+    <section class="search-section">
+      <div class="search-wrapper">
+        <div class="search-label">
+          <span class="blink-cursor">▋</span> INITIATE COMPANY INVESTIGATION
+        </div>
+        <div class="search-box">
+          <div class="search-icon">🔍</div>
+          <input
+            type="text"
+            id="company-input"
+            placeholder="Enter target company name…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="search-btn" onclick="research()">
+            <span>INVESTIGATE</span>
+          </button>
+        </div>
+        <div class="quick-targets">
+          <span class="qt-label">QUICK TARGETS:</span>
+          <button class="qt-btn" onclick="quickSearch('Apple')">Apple</button>
+          <button class="qt-btn" onclick="quickSearch('Tesla')">Tesla</button>
+          <button class="qt-btn" onclick="quickSearch('Amazon')">Amazon</button>
+          <button class="qt-btn" onclick="quickSearch('SpaceX')">SpaceX</button>
+          <button class="qt-btn" onclick="quickSearch('NVIDIA')">NVIDIA</button>
+          <button class="qt-btn" onclick="quickSearch('OpenAI')">OpenAI</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Status Section -->
+    <section id="status-section" class="status-section hidden">
+      <div class="status-inner">
+        <div class="radar-anim">
+          <div class="radar-ring r1"></div>
+          <div class="radar-ring r2"></div>
+          <div class="radar-ring r3"></div>
+          <div class="radar-dot"></div>
+        </div>
+        <div class="status-text-block">
+          <div id="status-headline" class="status-headline">INVESTIGATION IN PROGRESS</div>
+          <div id="status-message" class="status-message">Connecting to intelligence network…</div>
+          <div class="progress-track">
+            <div id="progress-bar" class="progress-bar"></div>
+          </div>
+          <div id="status-log" class="status-log"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Error Section -->
+    <section id="error-section" class="error-section hidden">
+      <div class="error-box">
+        <div class="error-icon">⚠</div>
+        <div class="error-text">
+          <div class="error-title">INVESTIGATION FAILED</div>
+          <div id="error-message">An unknown error occurred.</div>
+        </div>
+        <button class="retry-btn" onclick="research()">RETRY</button>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="results-section" class="results-section hidden">
+
+      <!-- Dossier Header -->
+      <div class="dossier-header">
+        <div class="dossier-stamp">INTELLIGENCE DOSSIER</div>
+        <div id="dossier-name" class="dossier-name"></div>
+        <div class="dossier-meta">
+          <span id="dossier-industry" class="dossier-tag"></span>
+          <span id="dossier-ticker" class="dossier-ticker hidden"></span>
+        </div>
+        <div class="dossier-date" id="dossier-date"></div>
+      </div>
+
+      <!-- Card Grid -->
+      <div class="card-grid">
+
+        <!-- Overview -->
+        <div class="card card-overview" id="card-overview">
+          <div class="card-header">
+            <span class="card-icon">🏢</span>
+            <h2>COMPANY OVERVIEW</h2>
+            <span class="card-tag">PROFILE</span>
+          </div>
+          <div class="card-body" id="overview-body"></div>
+        </div>
+
+        <!-- Leadership -->
+        <div class="card card-leadership" id="card-leadership">
+          <div class="card-header">
+            <span class="card-icon">👤</span>
+            <h2>LEADERSHIP</h2>
+            <span class="card-tag">PERSONNEL</span>
+          </div>
+          <div class="card-body" id="leadership-body"></div>
+        </div>
+
+        <!-- Financials -->
+        <div class="card card-financials" id="card-financials">
+          <div class="card-header">
+            <span class="card-icon">💰</span>
+            <h2>FINANCIAL DATA</h2>
+            <span class="card-tag">ASSETS</span>
+          </div>
+          <div class="card-body" id="financials-body"></div>
+        </div>
+
+        <!-- Latest News - full width -->
+        <div class="card card-wide card-news" id="card-news">
+          <div class="card-header">
+            <span class="card-icon">📡</span>
+            <h2>LATEST INTELLIGENCE</h2>
+            <span class="card-tag">SIGNALS</span>
+          </div>
+          <div class="card-body" id="news-body"></div>
+        </div>
+
+        <!-- Company Actions -->
+        <div class="card card-actions" id="card-actions">
+          <div class="card-header">
+            <span class="card-icon">⚡</span>
+            <h2>COMPANY ACTIONS</h2>
+            <span class="card-tag">OPERATIONS</span>
+          </div>
+          <div class="card-body" id="actions-body"></div>
+        </div>
+
+        <!-- Trade & Shipments -->
+        <div class="card card-shipments" id="card-shipments">
+          <div class="card-header">
+            <span class="card-icon">🚢</span>
+            <h2>TRADE &amp; LOGISTICS</h2>
+            <span class="card-tag">MOVEMENT</span>
+          </div>
+          <div class="card-body" id="shipments-body"></div>
+        </div>
+
+        <!-- Risk Flags - full width -->
+        <div class="card card-wide card-risk" id="card-risk">
+          <div class="card-header">
+            <span class="card-icon">⚠️</span>
+            <h2>RISK FLAGS</h2>
+            <span class="card-tag">THREAT ASSESSMENT</span>
+          </div>
+          <div class="card-body" id="risk-body"></div>
+        </div>
+
+      </div><!-- end card-grid -->
+
+      <div class="report-footer">
+        <div>CORP INTEL — POWERED BY CLAUDE AI</div>
+        <div>FOR INFORMATIONAL PURPOSES ONLY</div>
+      </div>
+
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div>CORP INTEL &copy; 2026 — Corporate Intelligence Platform &mdash; Data sourced via real-time web intelligence</div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
