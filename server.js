@@ -121,7 +121,7 @@ app.post('/api/research', async (req, res) => {
     send('status', 'Connecting to intelligence network...');
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.0-flash',
     });
 
     send('status', 'Compiling intelligence report...');
