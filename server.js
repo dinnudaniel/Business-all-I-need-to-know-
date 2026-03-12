@@ -67,7 +67,7 @@ async function fetchRealNews(company) {
       const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
       if (!res.ok) return [];
       const xml = await res.text();
-      return parseRssItems(xml, 5);
+      return parseRssItems(xml, 8);
     } catch {
       return [];
     }
@@ -76,14 +76,14 @@ async function fetchRealNews(company) {
   const results = await Promise.allSettled(NEWS_EDITIONS.map(e => fetchEdition(e)));
   const allItems = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
 
-  // Deduplicate and cap at 12 items
+  // Deduplicate and cap at 15 items
   const seen = [];
   const deduped = [];
   for (const item of allItems) {
     if (!isDuplicate(item.title, seen)) {
       seen.push(item.title);
       deduped.push(item);
-      if (deduped.length >= 12) break;
+      if (deduped.length >= 15) break;
     }
   }
 
