@@ -79,6 +79,26 @@ Output ONLY a valid JSON object with no markdown, no code blocks, no extra text:
 }
 `;
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function generateWithRetry(model, prompt, maxRetries = 4) {
+  let delay = 2000;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await model.generateContent(prompt);
+    } catch (err) {
+      const msg = err.message || '';
+      const isRateLimit = msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED');
+      if (isRateLimit && attempt < maxRetries) {
+        await sleep(delay);
+        delay *= 2;
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 app.post('/api/research', async (req, res) => {
   const { company } = req.body;
 
@@ -106,7 +126,7 @@ app.post('/api/research', async (req, res) => {
 
     send('status', 'Compiling intelligence report...');
 
-    const result = await model.generateContent(PROMPT_TEMPLATE(sanitizedCompany));
+    const result = await generateWithRetry(model, PROMPT_TEMPLATE(sanitizedCompany));
     const response = result.response;
 
     send('status', 'Processing intelligence data...');
@@ -138,14 +158,15 @@ app.post('/api/research', async (req, res) => {
     send('complete', parsed);
     res.end();
   } catch (err) {
-    console.error('Research error:', err);
+    console.error('Research error full:', JSON.stringify({ message: err.message, status: err.status, code: err.code, details: err.errorDetails }));
     const msg = err.message || '';
-    if (msg.includes('API_KEY') || msg.includes('403') || msg.includes('401')) {
+    const status = err.status || err.code || '';
+    if (msg.includes('API_KEY') || msg.includes('403') || msg.includes('401') || String(status) === '403' || String(status) === '401') {
       send('error', 'Invalid API key. Check your GEMINI_API_KEY in Render environment variables.');
-    } else if (msg.includes('429') || msg.includes('quota')) {
+    } else if (msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || String(status) === '429') {
       send('error', 'Rate limit reached. Wait a moment and try again.');
     } else {
-      send('error', msg || 'Investigation failed. Please try again.');
+      send('error', `Error: ${msg || JSON.stringify(status) || 'Investigation failed. Please try again.'}`);
     }
     res.end();
   }
