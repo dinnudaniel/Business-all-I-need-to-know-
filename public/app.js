@@ -371,6 +371,12 @@ function setupCarouselTouch(trackEl, id) {
   }, { passive: true });
 }
 
+function toggleNewsInterpret(btn) {
+  const panel = btn.closest('.news-item').querySelector('.news-interpret-panel');
+  const expanded = panel.classList.toggle('expanded');
+  btn.textContent = expanded ? '▲ LESS' : '▼ WHAT THIS MEANS';
+}
+
 function renderNews(news) {
   if (!news || !news.length) return;
   const track = document.getElementById('news-track');
@@ -382,6 +388,12 @@ function renderNews(news) {
       <div class="news-headline">${esc(n.headline || '')}</div>
       <p class="news-summary">${esc(n.summary || '')}</p>
       ${n.significance ? `<div class="news-sig">⚡ ${esc(n.significance)}</div>` : ''}
+      ${n.interpretation ? `
+        <button class="news-interpret-btn" onclick="toggleNewsInterpret(this)">▼ WHAT THIS MEANS</button>
+        <div class="news-interpret-panel">
+          <div class="news-interpret-content">${esc(n.interpretation)}</div>
+        </div>
+      ` : ''}
     </div>
   `).join('');
 

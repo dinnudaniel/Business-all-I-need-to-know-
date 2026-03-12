@@ -8,29 +8,86 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// ── Fetch real-time news from Google News RSS (free, no API key) ──
-async function fetchRealNews(company) {
-  try {
-    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(company)}&hl=en&gl=US&ceid=US:en`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
-    const xml = await res.text();
+// ── Fetch real-time news from multiple regional Google News RSS feeds ──
+const NEWS_EDITIONS = [
+  // North America
+  { hl: 'en', gl: 'US', ceid: 'US:en' },
+  // UK / Europe
+  { hl: 'en', gl: 'GB', ceid: 'GB:en' },
+  // Middle East
+  { hl: 'en', gl: 'AE', ceid: 'AE:en' },   // UAE
+  { hl: 'en', gl: 'SA', ceid: 'SA:en' },   // Saudi Arabia
+  { hl: 'en', gl: 'QA', ceid: 'QA:en' },   // Qatar
+  { hl: 'en', gl: 'EG', ceid: 'EG:en' },   // Egypt
+  // Asia Pacific
+  { hl: 'en', gl: 'SG', ceid: 'SG:en' },   // Singapore
+  { hl: 'en', gl: 'IN', ceid: 'IN:en' },   // India
+  { hl: 'en', gl: 'AU', ceid: 'AU:en' },   // Australia
+  { hl: 'ko', gl: 'KR', ceid: 'KR:ko' },   // South Korea
+  { hl: 'ja', gl: 'JP', ceid: 'JP:ja' },   // Japan
+  // Africa
+  { hl: 'en', gl: 'NG', ceid: 'NG:en' },   // Nigeria
+  { hl: 'en', gl: 'ZA', ceid: 'ZA:en' },   // South Africa
+  // Latin America
+  { hl: 'en', gl: 'BR', ceid: 'BR:en' },   // Brazil (English)
+];
 
-    // Parse RSS items with regex
-    const items = [];
-    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-    let match;
-    while ((match = itemRegex.exec(xml)) !== null && items.length < 8) {
-      const block = match[1];
-      const title = (block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || block.match(/<title>(.*?)<\/title>/) || [])[1] || '';
-      const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1] || '';
-      const source = (block.match(/<source[^>]*>(.*?)<\/source>/) || [])[1] || '';
-      if (title) items.push({ title: title.trim(), pubDate: pubDate.trim(), source: source.trim() });
-    }
-    return items.length > 0 ? items : null;
-  } catch {
-    return null;
+function parseRssItems(xml, limit = 5) {
+  const items = [];
+  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+  let match;
+  while ((match = itemRegex.exec(xml)) !== null && items.length < limit) {
+    const block = match[1];
+    const title = (block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || block.match(/<title>(.*?)<\/title>/) || [])[1] || '';
+    const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1] || '';
+    const source = (block.match(/<source[^>]*>(.*?)<\/source>/) || [])[1] || '';
+    if (title) items.push({ title: title.trim(), pubDate: pubDate.trim(), source: source.trim() });
   }
+  return items;
+}
+
+// Simple deduplication: skip articles whose title shares >60% words with an already-seen title
+function isDuplicate(title, seen) {
+  const words = new Set(title.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3));
+  if (words.size === 0) return false;
+  for (const s of seen) {
+    const sWords = new Set(s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3));
+    const intersection = [...words].filter(w => sWords.has(w)).length;
+    const overlap = intersection / Math.min(words.size, sWords.size);
+    if (overlap > 0.6) return true;
+  }
+  return false;
+}
+
+async function fetchRealNews(company) {
+  const q = encodeURIComponent(company);
+  const fetchEdition = async (edition) => {
+    try {
+      const url = `https://news.google.com/rss/search?q=${q}&hl=${edition.hl}&gl=${edition.gl}&ceid=${edition.ceid}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      if (!res.ok) return [];
+      const xml = await res.text();
+      return parseRssItems(xml, 5);
+    } catch {
+      return [];
+    }
+  };
+
+  const results = await Promise.allSettled(NEWS_EDITIONS.map(e => fetchEdition(e)));
+  const allItems = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+
+  // Deduplicate and cap at 12 items
+  const seen = [];
+  const deduped = [];
+  for (const item of allItems) {
+    if (!isDuplicate(item.title, seen)) {
+      seen.push(item.title);
+      deduped.push(item);
+      if (deduped.length >= 12) break;
+    }
+  }
+
+  return deduped.length > 0 ? deduped : null;
 }
 
 const PROMPT_TEMPLATE = (company, newsArticles) => {
@@ -80,7 +137,8 @@ Output ONLY a valid JSON object with no markdown, no code blocks, no extra text:
       "date": "YYYY-MM-DD or YYYY-MM",
       "headline": "News headline",
       "summary": "1-2 sentence factual summary",
-      "significance": "Why this matters for the company"
+      "significance": "Why this matters for the company",
+      "interpretation": "Plain-language explanation of what this really means in practice — what it implies for the company's business, customers, competitors or the broader industry. 2-3 sentences written for a non-expert reader who wants to understand the real-world impact."
     }
   ],
   "company_actions": [
