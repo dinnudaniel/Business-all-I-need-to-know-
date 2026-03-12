@@ -92,16 +92,18 @@ async function fetchRealNews(company) {
 
 const PROMPT_TEMPLATE = (company, newsArticles) => {
   const newsContext = newsArticles && newsArticles.length > 0
-    ? `\n\nREAL-TIME NEWS HEADLINES (from BBC, CNN, Reuters and others — use these to inform your latest_news and rumors analysis):\n${newsArticles.map((a, i) =>
+    ? `\n\nSUPPLEMENTARY REAL-TIME HEADLINES (use these alongside your own knowledge — they cover only the last 7-14 days so do NOT ignore significant events you know about that may be older):\n${newsArticles.map((a, i) =>
         `${i + 1}. [${a.source || 'News'}] ${a.title}${a.pubDate ? ' (' + a.pubDate.slice(0, 16) + ')' : ''}`
       ).join('\n')}\n`
     : '';
 
   return `You are CORP INTEL, an elite corporate intelligence analyst. Research "${company}" thoroughly and build a complete intelligence dossier.${newsContext}
+IMPORTANT INSTRUCTION ON NEWS: Use BOTH your training knowledge AND the supplementary headlines above. The headlines only cover the last 7-14 days — do not ignore significant events from the past 3-6 months that you know about (government directives, regulatory actions, major policy changes, earnings, controversies, etc.). Combine both sources to give the most complete picture.
+
 Research these areas:
 1. What the company does, history, headquarters, employee count
 2. The CEO — name, background, tenure, notable decisions
-3. Latest news (past 30-60 days) — earnings, launches, controversies, partnerships. If real-time news context was provided above, use those articles as your primary source for this section.
+3. Latest news (past 3-6 months) — earnings, launches, controversies, partnerships, government actions, regulatory decisions. Draw from BOTH the headlines above AND your training knowledge. Include all significant events you are aware of.
 4. Recent company actions — acquisitions, layoffs, expansions, regulatory issues
 5. Financial data — revenue, market cap, stock price (if public)
 6. Supply chain, trade activities, shipments or logistics information
