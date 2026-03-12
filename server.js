@@ -121,7 +121,7 @@ app.post('/api/research', async (req, res) => {
     send('status', 'Connecting to intelligence network...');
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash-lite',
+      model: 'gemini-1.5-flash',
     });
 
     send('status', 'Compiling intelligence report...');
@@ -158,9 +158,15 @@ app.post('/api/research', async (req, res) => {
     send('complete', parsed);
     res.end();
   } catch (err) {
-    const errInfo = { message: err.message, status: err.status, code: err.code, details: err.errorDetails };
-    console.error('Research error full:', JSON.stringify(errInfo));
-    send('error', `DEBUG — status:${err.status || 'none'} code:${err.code || 'none'} msg:${err.message || 'none'}`);
+    console.error('Research error:', err.status, err.message);
+    const msg = err.message || '';
+    if (msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+      send('error', 'Rate limit reached. Wait a moment and try again.');
+    } else if (msg.includes('API_KEY') || msg.includes('403') || msg.includes('401')) {
+      send('error', 'Invalid API key. Check your GEMINI_API_KEY in Render environment variables.');
+    } else {
+      send('error', 'Investigation failed. Please try again.');
+    }
     res.end();
   }
 });
