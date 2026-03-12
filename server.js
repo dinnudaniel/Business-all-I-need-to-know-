@@ -8,16 +8,26 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// ── Fetch real-time news from GNews ──
+// ── Fetch real-time news from Google News RSS (free, no API key) ──
 async function fetchRealNews(company) {
-  const apiKey = process.env.GNEWS_API_KEY;
-  if (!apiKey) return null;
   try {
-    const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(company)}&lang=en&max=8&sortby=publishedAt&apikey=${apiKey}`;
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(company)}&hl=en&gl=US&ceid=US:en`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
-    const data = await res.json();
-    return data.articles && data.articles.length > 0 ? data.articles : null;
+    const xml = await res.text();
+
+    // Parse RSS items with regex
+    const items = [];
+    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+    let match;
+    while ((match = itemRegex.exec(xml)) !== null && items.length < 8) {
+      const block = match[1];
+      const title = (block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || block.match(/<title>(.*?)<\/title>/) || [])[1] || '';
+      const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1] || '';
+      const source = (block.match(/<source[^>]*>(.*?)<\/source>/) || [])[1] || '';
+      if (title) items.push({ title: title.trim(), pubDate: pubDate.trim(), source: source.trim() });
+    }
+    return items.length > 0 ? items : null;
   } catch {
     return null;
   }
@@ -25,8 +35,8 @@ async function fetchRealNews(company) {
 
 const PROMPT_TEMPLATE = (company, newsArticles) => {
   const newsContext = newsArticles && newsArticles.length > 0
-    ? `\n\nREAL-TIME NEWS (published in the last few days — use these to inform your latest_news and rumors analysis):\n${newsArticles.map((a, i) =>
-        `${i + 1}. [${(a.publishedAt || '').slice(0, 10)}] ${a.title} — ${a.description || ''}`
+    ? `\n\nREAL-TIME NEWS HEADLINES (from BBC, CNN, Reuters and others — use these to inform your latest_news and rumors analysis):\n${newsArticles.map((a, i) =>
+        `${i + 1}. [${a.source || 'News'}] ${a.title}${a.pubDate ? ' (' + a.pubDate.slice(0, 16) + ')' : ''}`
       ).join('\n')}\n`
     : '';
 
