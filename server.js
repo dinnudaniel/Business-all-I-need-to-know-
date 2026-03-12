@@ -1,12 +1,12 @@
 const express = require('express');
-const Groq = require('groq-sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const path = require('path');
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const PROMPT_TEMPLATE = (company) => `
 You are CORP INTEL, an elite corporate intelligence analyst. Research "${company}" thoroughly and build a complete intelligence dossier.
@@ -81,19 +81,14 @@ Output ONLY a valid JSON object with no markdown, no code blocks, no extra text:
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function generateWithRetry(prompt, maxRetries = 4) {
+async function generateWithRetry(model, prompt, maxRetries = 4) {
   let delay = 2000;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const completion = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-      });
-      return completion.choices[0].message.content;
+      return await model.generateContent(prompt);
     } catch (err) {
       const msg = err.message || '';
-      const isRateLimit = err.status === 429 || msg.includes('429') || msg.includes('rate_limit');
+      const isRateLimit = msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED');
       if (isRateLimit && attempt < maxRetries) {
         await sleep(delay);
         delay *= 2;
@@ -124,11 +119,17 @@ app.post('/api/research', async (req, res) => {
 
   try {
     send('status', 'Connecting to intelligence network...');
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
     send('status', 'Compiling intelligence report...');
 
-    const rawText = await generateWithRetry(PROMPT_TEMPLATE(sanitizedCompany));
+    const result = await generateWithRetry(model, PROMPT_TEMPLATE(sanitizedCompany));
+    const response = result.response;
 
     send('status', 'Processing intelligence data...');
+
+    const rawText = response.text();
 
     const cleaned = rawText
       .replace(/^```(?:json)?\s*/i, '')
@@ -157,10 +158,10 @@ app.post('/api/research', async (req, res) => {
   } catch (err) {
     console.error('Research error:', err.status, err.message);
     const msg = err.message || '';
-    if (err.status === 429 || msg.includes('rate_limit')) {
+    if (msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
       send('error', 'Rate limit reached. Wait a moment and try again.');
-    } else if (err.status === 401 || msg.includes('invalid_api_key')) {
-      send('error', 'Invalid API key. Check your GROQ_API_KEY in Render environment variables.');
+    } else if (msg.includes('API_KEY') || msg.includes('403') || msg.includes('401')) {
+      send('error', 'Invalid API key. Check your GEMINI_API_KEY in Render environment variables.');
     } else {
       send('error', 'Investigation failed. Please try again.');
     }
@@ -175,5 +176,5 @@ app.get('/health', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`\n🔍 CORP INTEL running at http://localhost:${PORT}`);
-  console.log(`   Set GROQ_API_KEY env var to activate\n`);
+  console.log(`   Set GEMINI_API_KEY env var to activate\n`);
 });
