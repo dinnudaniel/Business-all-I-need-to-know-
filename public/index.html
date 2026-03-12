@@ -141,9 +141,29 @@
           <div class="card-header">
             <span class="card-icon">📡</span>
             <h2>LATEST INTELLIGENCE</h2>
+            <div class="carousel-controls">
+              <button class="carousel-btn" id="news-prev" onclick="carouselPrev('news')" aria-label="Previous">&#8592;</button>
+              <span class="carousel-counter" id="news-counter"></span>
+              <button class="carousel-btn" id="news-next" onclick="carouselNext('news')" aria-label="Next">&#8594;</button>
+            </div>
             <span class="card-tag">SIGNALS</span>
           </div>
-          <div class="card-body" id="news-body"></div>
+          <div class="card-body">
+            <div class="news-carousel" id="news-carousel">
+              <div class="news-carousel-track" id="news-track"></div>
+            </div>
+            <div class="carousel-dots" id="news-dots"></div>
+          </div>
+        </div>
+
+        <!-- Rumors & Social Intelligence - full width -->
+        <div class="card card-wide card-rumors" id="card-rumors">
+          <div class="card-header">
+            <span class="card-icon">👁</span>
+            <h2>RUMORS &amp; SOCIAL INTELLIGENCE</h2>
+            <span class="card-tag">UNVERIFIED</span>
+          </div>
+          <div class="card-body" id="rumors-body"></div>
         </div>
 
         <!-- Company Actions -->
