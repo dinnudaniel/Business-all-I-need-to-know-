@@ -8,17 +8,39 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const PROMPT_TEMPLATE = (company) => `
-You are CORP INTEL, an elite corporate intelligence analyst. Research "${company}" thoroughly and build a complete intelligence dossier.
+// ── Fetch real-time news from GNews ──
+async function fetchRealNews(company) {
+  const apiKey = process.env.GNEWS_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(company)}&lang=en&max=8&sortby=publishedAt&apikey=${apiKey}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.articles && data.articles.length > 0 ? data.articles : null;
+  } catch {
+    return null;
+  }
+}
 
+const PROMPT_TEMPLATE = (company, newsArticles) => {
+  const newsContext = newsArticles && newsArticles.length > 0
+    ? `\n\nREAL-TIME NEWS (published in the last few days — use these to inform your latest_news and rumors analysis):\n${newsArticles.map((a, i) =>
+        `${i + 1}. [${(a.publishedAt || '').slice(0, 10)}] ${a.title} — ${a.description || ''}`
+      ).join('\n')}\n`
+    : '';
+
+  return `You are CORP INTEL, an elite corporate intelligence analyst. Research "${company}" thoroughly and build a complete intelligence dossier.${newsContext}
 Research these areas:
 1. What the company does, history, headquarters, employee count
 2. The CEO — name, background, tenure, notable decisions
-3. Latest news (past 30-60 days) — earnings, launches, controversies, partnerships
+3. Latest news (past 30-60 days) — earnings, launches, controversies, partnerships. If real-time news context was provided above, use those articles as your primary source for this section.
 4. Recent company actions — acquisitions, layoffs, expansions, regulatory issues
 5. Financial data — revenue, market cap, stock price (if public)
 6. Supply chain, trade activities, shipments or logistics information
 7. Risk flags — lawsuits, controversies, regulatory scrutiny
+8. Rumors — unconfirmed reports, social media speculation, industry whispers, analyst speculation, anything circulating that is NOT yet confirmed
+9. Social intelligence — overall market/media/analyst sentiment and key themes being discussed
 
 Output ONLY a valid JSON object with no markdown, no code blocks, no extra text:
 
@@ -45,7 +67,7 @@ Output ONLY a valid JSON object with no markdown, no code blocks, no extra text:
   },
   "latest_news": [
     {
-      "date": "YYYY-MM or approximate",
+      "date": "YYYY-MM-DD or YYYY-MM",
       "headline": "News headline",
       "summary": "1-2 sentence factual summary",
       "significance": "Why this matters for the company"
@@ -54,7 +76,7 @@ Output ONLY a valid JSON object with no markdown, no code blocks, no extra text:
   "company_actions": [
     {
       "date": "YYYY-MM or approximate",
-      "action": "Type (Acquisition, Partnership, Expansion, Layoff, IPO, Product Launch, etc.)",
+      "action": "Type (Acquisition, Partnership, Expansion, Layoff, IPO, Product Launch, Regulatory Action, etc.)",
       "description": "What happened and impact"
     }
   ],
@@ -73,11 +95,25 @@ Output ONLY a valid JSON object with no markdown, no code blocks, no extra text:
       {"description": "Notable trade, logistics, or supply chain activity"}
     ]
   },
+  "rumors": [
+    {
+      "source": "Origin (social media chatter, industry insiders, analyst speculation, media rumors, etc.)",
+      "claim": "The unconfirmed claim or rumor circulating about this company",
+      "credibility": "Low / Medium / High",
+      "context": "Why this rumor is circulating and what, if anything, points toward or against it"
+    }
+  ],
+  "social_intelligence": {
+    "sentiment": "Bullish / Bearish / Neutral / Mixed",
+    "summary": "2-3 sentences on current analyst, media and market participant sentiment toward this company",
+    "key_themes": ["theme being discussed", "another theme", "a third theme"]
+  },
   "risk_flags": [
     "Specific risk, controversy, lawsuit, or concern with brief context"
   ]
 }
 `;
+};
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -123,9 +159,16 @@ app.post('/api/research', async (req, res) => {
 
   try {
     send('status', 'Connecting to intelligence network...');
+
+    // Fetch real-time news to ground the AI
+    const newsArticles = await fetchRealNews(sanitizedCompany);
+    if (newsArticles) {
+      send('status', `Retrieved ${newsArticles.length} real-time news articles...`);
+    }
+
     send('status', 'Compiling intelligence report...');
 
-    const rawText = await generateWithRetry(PROMPT_TEMPLATE(sanitizedCompany));
+    const rawText = await generateWithRetry(PROMPT_TEMPLATE(sanitizedCompany, newsArticles));
 
     send('status', 'Processing intelligence data...');
 
@@ -155,7 +198,14 @@ app.post('/api/research', async (req, res) => {
     res.end();
   } catch (err) {
     console.error('Research error:', err.status, err.message);
-    send('error', `DEBUG — status:${err.status || 'none'} msg:${err.message || 'none'}`);
+    const msg = err.message || '';
+    if (err.status === 429 || msg.includes('rate_limit')) {
+      send('error', 'Rate limit reached. Wait a moment and try again.');
+    } else if (err.status === 401 || msg.includes('invalid_api_key')) {
+      send('error', 'Invalid API key. Check your GROQ_API_KEY in Render environment variables.');
+    } else {
+      send('error', 'Investigation failed. Please try again.');
+    }
     res.end();
   }
 });
@@ -167,5 +217,5 @@ app.get('/health', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`\n🔍 CORP INTEL running at http://localhost:${PORT}`);
-  console.log(`   Set GROQ_API_KEY env var to activate\n`);
+  console.log(`   Set GROQ_API_KEY and GNEWS_API_KEY env vars to activate\n`);
 });

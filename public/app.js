@@ -184,6 +184,7 @@ function renderDossier(data) {
   renderLeadership(data.leadership);
   renderFinancials(data.financials);
   renderNews(data.latest_news);
+  renderRumors(data.rumors, data.social_intelligence);
   renderActions(data.company_actions);
   renderShipments(data.shipments_trade);
   renderRisk(data.risk_flags);
@@ -302,22 +303,154 @@ function renderFinancials(financials) {
   body.innerHTML = html;
 }
 
+// ── Carousel State ──
+const carousels = {};
+
+function initCarousel(id, total) {
+  carousels[id] = { index: 0, total };
+  updateCarouselUI(id);
+}
+
+function carouselPrev(id) {
+  const c = carousels[id];
+  if (!c) return;
+  c.index = (c.index - 1 + c.total) % c.total;
+  updateCarouselUI(id);
+}
+
+function carouselNext(id) {
+  const c = carousels[id];
+  if (!c) return;
+  c.index = (c.index + 1) % c.total;
+  updateCarouselUI(id);
+}
+
+function carouselGoTo(id, index) {
+  const c = carousels[id];
+  if (!c) return;
+  c.index = index;
+  updateCarouselUI(id);
+}
+
+function updateCarouselUI(id) {
+  const c = carousels[id];
+  const track = document.getElementById(`${id}-track`);
+  const dotsEl = document.getElementById(`${id}-dots`);
+  const counter = document.getElementById(`${id}-counter`);
+  if (!track || !c) return;
+
+  // Scroll track to active card
+  const items = track.querySelectorAll('.news-item');
+  if (items[c.index]) {
+    items[c.index].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+  }
+
+  // Update dots
+  if (dotsEl) {
+    dotsEl.querySelectorAll('.carousel-dot').forEach((dot, i) => {
+      dot.classList.toggle('active', i === c.index);
+    });
+  }
+
+  // Update counter
+  if (counter) counter.textContent = `${c.index + 1} / ${c.total}`;
+
+  // Update prev/next button states
+  const prevBtn = document.getElementById(`${id}-prev`);
+  const nextBtn = document.getElementById(`${id}-next`);
+  if (prevBtn) prevBtn.disabled = c.total <= 1;
+  if (nextBtn) nextBtn.disabled = c.total <= 1;
+}
+
+function setupCarouselTouch(trackEl, id) {
+  let startX = 0;
+  trackEl.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, { passive: true });
+  trackEl.addEventListener('touchend', (e) => {
+    const diff = startX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 40) diff > 0 ? carouselNext(id) : carouselPrev(id);
+  }, { passive: true });
+}
+
 function renderNews(news) {
   if (!news || !news.length) return;
-  const body = document.getElementById('news-body');
+  const track = document.getElementById('news-track');
+  const dotsEl = document.getElementById('news-dots');
 
-  body.innerHTML = `
-    <div class="news-grid">
-      ${news.map(n => `
-        <div class="news-item">
-          <div class="news-date">${esc(n.date || '')}</div>
-          <div class="news-headline">${esc(n.headline || '')}</div>
-          <p class="news-summary">${esc(n.summary || '')}</p>
-          ${n.significance ? `<div class="news-sig">⚡ ${esc(n.significance)}</div>` : ''}
-        </div>
-      `).join('')}
+  track.innerHTML = news.map(n => `
+    <div class="news-item">
+      <div class="news-date">${esc(n.date || '')}</div>
+      <div class="news-headline">${esc(n.headline || '')}</div>
+      <p class="news-summary">${esc(n.summary || '')}</p>
+      ${n.significance ? `<div class="news-sig">⚡ ${esc(n.significance)}</div>` : ''}
     </div>
-  `;
+  `).join('');
+
+  // Build dots
+  dotsEl.innerHTML = news.map((_, i) =>
+    `<button class="carousel-dot${i === 0 ? ' active' : ''}" onclick="carouselGoTo('news', ${i})" aria-label="Go to slide ${i + 1}"></button>`
+  ).join('');
+
+  setupCarouselTouch(track, 'news');
+  initCarousel('news', news.length);
+}
+
+function renderRumors(rumors, social) {
+  const body = document.getElementById('rumors-body');
+  if (!body) return;
+  let html = '';
+
+  // Social intelligence sentiment block
+  if (social) {
+    const sentimentClass = {
+      'Bullish': 'sentiment-bullish',
+      'Bearish': 'sentiment-bearish',
+      'Neutral': 'sentiment-neutral',
+      'Mixed':   'sentiment-mixed',
+    }[social.sentiment] || 'sentiment-neutral';
+
+    html += `
+      <div class="social-intel-block">
+        <div class="social-intel-header">
+          <span class="sentiment-badge ${sentimentClass}">${esc(social.sentiment || 'Neutral')}</span>
+          <span class="social-intel-label">MARKET SENTIMENT</span>
+        </div>
+        <p class="social-intel-summary">${esc(social.summary || '')}</p>
+        ${social.key_themes && social.key_themes.length ? `
+          <div class="theme-tags">
+            ${social.key_themes.map(t => `<span class="theme-tag">${esc(t)}</span>`).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  // Rumors list
+  if (rumors && rumors.length) {
+    html += `<div class="rumors-list">` +
+      rumors.map(r => {
+        const credClass = {
+          'Low':    'cred-low',
+          'Medium': 'cred-medium',
+          'High':   'cred-high',
+        }[r.credibility] || 'cred-low';
+
+        return `
+          <div class="rumor-item">
+            <div class="rumor-header">
+              <span class="rumor-source">📌 ${esc(r.source || '')}</span>
+              <span class="cred-badge ${credClass}">${esc(r.credibility || 'Low')} CREDIBILITY</span>
+            </div>
+            <div class="rumor-claim">${esc(r.claim || '')}</div>
+            ${r.context ? `<p class="rumor-context">${esc(r.context)}</p>` : ''}
+          </div>
+        `;
+      }).join('') +
+    `</div>`;
+  } else if (!social) {
+    html = '<p style="color:var(--text-muted);font-size:13px">No rumors or social intelligence available.</p>';
+  }
+
+  body.innerHTML = html;
 }
 
 function renderActions(actions) {
