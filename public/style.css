@@ -63,6 +63,15 @@ body {
   );
 }
 
+/* ── Blue top banner ── */
+body::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, var(--blue) 30%, #7ec8ff 60%, var(--blue) 80%, transparent 100%);
+  opacity: 0.7;
+}
+
 /* ── Header ── */
 header {
   position: sticky;
@@ -586,8 +595,8 @@ main {
 }
 
 .info-item {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.09);
   border-radius: var(--radius);
   padding: 10px 12px;
   display: flex;
@@ -696,8 +705,9 @@ main {
 
 .fin-block {
   text-align: center;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(74,158,255,0.15);
+  border-top: 2px solid var(--blue);
   border-radius: var(--radius);
   padding: 12px 8px;
 }
@@ -752,9 +762,9 @@ main {
 }
 
 .news-item {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-left: 3px solid var(--gold-dim);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-left: 3px solid var(--blue);
   border-radius: var(--radius);
   padding: 14px;
 }
@@ -844,8 +854,9 @@ main {
   gap: 10px;
   align-items: flex-start;
   padding: 10px 14px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-left: 3px solid rgba(74,158,255,0.4);
   border-radius: var(--radius);
   font-size: 13px;
   color: var(--text-muted);
@@ -886,8 +897,9 @@ main {
   justify-content: space-between;
   margin-top: 32px;
   padding: 16px 20px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-top: 2px solid rgba(74,158,255,0.3);
   border-radius: var(--radius);
   font-family: var(--font-mono);
   font-size: 10px;
