@@ -159,14 +159,7 @@ app.post('/api/research', async (req, res) => {
     res.end();
   } catch (err) {
     console.error('Research error:', err.status, err.message);
-    const msg = err.message || '';
-    if (msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
-      send('error', 'Rate limit reached. Wait a moment and try again.');
-    } else if (msg.includes('API_KEY') || msg.includes('403') || msg.includes('401')) {
-      send('error', 'Invalid API key. Check your GEMINI_API_KEY in Render environment variables.');
-    } else {
-      send('error', 'Investigation failed. Please try again.');
-    }
+    send('error', `DEBUG — status:${err.status || 'none'} code:${err.code || 'none'} msg:${err.message || 'none'}`);
     res.end();
   }
 });
